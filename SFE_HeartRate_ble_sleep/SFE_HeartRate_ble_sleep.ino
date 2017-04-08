@@ -27,8 +27,11 @@
 #include "MAX30105.h"
 
 #include "heartRate.h"
+#include <BMI160Gen.h>
 #include <ota_bootloader.h>
+
 #include <SimbleeBLE.h>
+#include "OHAK_Definitions.h"
 
 MAX30105 particleSensor;
 
@@ -37,7 +40,8 @@ byte rates[RATE_SIZE]; //Array of heart rates
 byte rateSpot = 0;
 long lastBeat = 0; //Time at which the last beat occurred
 long lastTime;
-long interval = 30000;
+long interval = 30000; //30000
+int sleepTime = 600;
 
 float beatsPerMinute;
 int beatAvg;
@@ -45,9 +49,16 @@ int lastBeatAvg;
 
 void setup()
 {
+  Wire.beginOnPins(SCL_PIN,SDA_PIN);
   SimbleeBLE.begin();
   pinMode(29,OUTPUT);
   digitalWrite(29,HIGH);
+  BMI160.begin(0, BMI_INT1);
+  BMI160.attachInterrupt(bmi160_intr);
+  BMI160.setIntTapEnabled(true);
+  BMI160.setIntDoubleTapEnabled(true);
+  BMI160.setStepDetectionMode(BMI160_STEP_MODE_NORMAL);
+  BMI160.setStepCountEnabled(true);
   //Serial.begin(115200);
   //Serial.println("Initializing...");
 
@@ -64,11 +75,25 @@ void setup()
   //particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
   lastTime = millis();
 }
+void bmi160_intr(void)
+{
+ byte int_status = BMI160.getIntStatus0();
+ // Serial.print("Steps ");
+ // Serial.print(BMI160.getStepCount());
+ // Serial.print(" Single ");
+ // Serial.print(bitRead(int_status,5));
+ // Serial.print(" Double ");
+ // Serial.print(bitRead(int_status,4));
+ // Serial.print(" REG ");
+ // Serial.print(int_status,BIN);
+ // Serial.println(" BMI160 interrupt: TAP! ");
+}
 
 void loop()
 {
   particleSensor.wakeUp();
   particleSensor.setup();
+  int steps = BMI160.getStepCount();
   long lastTime = millis();
   while(millis() - lastTime < interval){
     long irValue = particleSensor.getIR();
@@ -105,7 +130,7 @@ void loop()
   particleSensor.setPulseAmplitudeRed(0); //Turn off Red LED
   particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
   particleSensor.shutDown();
-  Simblee_ULPDelay(SECONDS(600));
+  Simblee_ULPDelay(SECONDS(sleepTime));
   //Serial.print("IR=");
   //Serial.print(irValue);
   //Serial.print(", BPM=");

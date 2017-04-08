@@ -10,25 +10,25 @@
 //int 1 = 20
 //int 2 = 24
 
-//void bmi160_intr(void)
-//{
-//  byte int_status = BMI160.getIntStatus0();
-//  Serial.print("Steps ");
-//  Serial.print(BMI160.getStepCount());
-//  Serial.print(" Single ");
-//  Serial.print(bitRead(int_status,5));
-//  Serial.print(" Double ");
-//  Serial.print(bitRead(int_status,4));  
-//  Serial.print(" REG ");
-//  Serial.print(int_status,BIN);
-//  Serial.println(" BMI160 interrupt: TAP! ");
-//}
+void bmi160_intr(void)
+{
+ byte int_status = BMI160.getIntStatus0();
+ // Serial.print("Steps ");
+ // Serial.print(BMI160.getStepCount());
+ // Serial.print(" Single ");
+ // Serial.print(bitRead(int_status,5));
+ // Serial.print(" Double ");
+ // Serial.print(bitRead(int_status,4));
+ // Serial.print(" REG ");
+ // Serial.print(int_status,BIN);
+ // Serial.println(" BMI160 interrupt: TAP! ");
+}
 
 void setup() {
   Wire.beginOnPins(SCL_PIN,SDA_PIN);
   SimbleeBLE.advertisementData = "OHAK_021";
   pinMode(RED,OUTPUT);
-  
+
   // start the BLE stack
   SimbleeBLE.begin();
   //Serial.begin(9600); // initialize Serial communication
