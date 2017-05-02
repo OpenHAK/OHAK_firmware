@@ -35,6 +35,7 @@
 #include "heartRate.h"
 #include <BMI160Gen.h>
 
+#include "QuickStats.h"
 #include <TimeLib.h>
 #include <Lazarus.h>
 Lazarus Lazarus;
@@ -44,7 +45,10 @@ Lazarus Lazarus;
 
 #include "OHAK_Definitions.h"
 
+
 MAX30105 particleSensor;
+
+QuickStats stats; //initialize an instance of stats class
 
 const byte RATE_SIZE = 4; //Increase this for more averaging. 4 is good.
 byte rates[RATE_SIZE]; //Array of heart rates
@@ -55,10 +59,13 @@ long interval = 30000; //30000
 int sleepTime = 60;
 
 float beatsPerMinute;
-int beatAvg;
-int lastBeatAvg;
+uint8_t beatAvg;
+uint8_t lastBeatAvg;
+uint8_t aveBeatsAve[255];
+uint8_t aveCounter=0;
 
-byte mode = 0;
+
+uint8_t mode = 0;
 bool bConnected = false;
 
 // interval between advertisement transmissions ms (range is 20ms to 10.24s) - default 20ms
@@ -73,34 +80,19 @@ int bleInterval = 675;  // 675 ms between advertisement transmissions longer tim
 
  */
 typedef struct {
-        byte flood : 1;
-        byte accel : 1;
-        byte digital_in1 : 1;
-        byte digital_in2 : 1;
-        byte digital_out1 : 1;
-        byte digital_out2 : 1;
-        byte extra0 : 1;
-        byte extra1 : 1;
-        byte conf1 : 1;
-        byte conf2 : 1;
-        byte conf3 : 1;
-        byte conf4 : 1;
-        byte conf5 : 1;
-        byte conf6 : 1;
-        byte conf7 : 1;
-        byte conf8 : 1;
-        short fwversion;
-        int sleepTime;
-        uint32_t nodeId; //store this nodeId
-        uint32_t epoch; //uptime in ms
-        float vbatt;
-        float vbattl;
-        float temp; //temperature maybe?
-        float si_humidity;
-        float si_temp;
-        float ext_temp;
+  uint32_t epoch;
+  uint16_t steps;
+  uint8_t hr;
+  uint8_t hrDev;
+  uint8_t battery;
+  uint8_t aux1;
+  uint8_t aux2;
+  uint8_t aux3;
 } Payload;
 
+Payload samples[512];
+
+uint16_t currentSample = 0;
 
 uint8_t advdata[15] =
 {
@@ -190,7 +182,6 @@ void loop()
         }
         particleSensor.wakeUp();
         particleSensor.setup();
-        int steps = BMI160.getStepCount();
         long lastTime;
         lastBeatAvg = 0;
         beatAvg = 0;
@@ -201,8 +192,36 @@ void loop()
         switch (mode) {
         case 0:
                 lastTime = millis();
+                samples[currentSample].epoch = now();
+                samples[currentSample].steps = BMI160.getStepCount();
+                aveCounter=0;
                 while(millis() - lastTime < interval) {
                         captureHR();
+                }
+                // uint16_t hrAveTotal=0;
+                // byte min = 255;
+                // byte max = 0;
+                // for(byte i=0;i<aveCounter;i++){
+                //   hrAveTotal += aveBeatsAve[i];
+                // }
+                //
+                // uint8_t sampleHR = hrAveTotal/aveCounter;
+                samples[currentSample].hr = stats.average(aveBeatsAve,aveCounter);;
+                samples[currentSample].hrDev = stats.stdev(aveBeatsAve,aveCounter);
+                samples[currentSample].battery = getBatteryVoltage();
+                samples[currentSample].aux1 = analogRead(PIN_2);
+                samples[currentSample].aux2 = analogRead(PIN_3);
+                samples[currentSample].aux3 = analogRead(PIN_4);
+                if(currentSample<511){
+                  currentSample++;
+                }else{
+                  //TODO: Check and see if this works!
+                  for (int k = currentSample; k > i; k--){
+                    samples[k]=samples[k-1];
+                  }
+                  // for(uint16_t t=0;t<512;t++){
+                  //   memcpy(&samples[1], &samples[0], (512-1)*sizeof(*samples));
+                  // }
                 }
                 sleepNow();
                 break;
@@ -275,6 +294,8 @@ void captureHR(){
         digitalWrite(GRN,HIGH);
 
         if(beatAvg != lastBeatAvg) {
+          aveBeatsAve[aveCounter] = beatAvg;
+          aveCounter++;
                 if(bConnected) {
                         SimbleeBLE.sendInt(beatAvg);
                 }
@@ -323,4 +344,14 @@ String digitalClockDisplay() {
         }
         dataString += second();
         return dataString;
+}
+uint8_t getBatteryVoltage(){
+  int counts = analogRead(V_SENSE);
+  // Serial.print(counts); Serial.print("\t");
+  float volts = float(counts) * (3.3/1023.0);
+  // Serial.print(volts,3); Serial.print("\t");
+  volts *=2;
+  // Serial.println(volts,3);
+
+  return volts/BATT_VOLT_CONST;
 }

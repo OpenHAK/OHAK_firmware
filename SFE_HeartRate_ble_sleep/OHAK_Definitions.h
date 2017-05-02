@@ -10,7 +10,7 @@
 #define MAX_INT 30    // MAX30102 interrupts on this Simblee pin
 #define SCL_PIN 13    // I2C clock pin
 #define SDA_PIN 10    // I2C data pin
-#define BMI_INT1 20   
+#define BMI_INT1 20
 #define BMI_INT2 24
 #define PIN_4 4       // GPIO and Analog pin
 #define PIN_3 3       // GPIO and Analog pin
@@ -95,3 +95,4 @@
 #define GREEN_ON 2
 #define BLUE_ON 3
 #define ALL_ON 4
+#define BATT_VOLT_CONST 0.0165
