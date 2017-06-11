@@ -277,7 +277,7 @@ void sendSamples(Payload sample){
         data[5] = sample.steps & 0xFF;
         data[6] = sample.hr;
         data[7] = sample.hrDev;
-        data[8] = sample.hrDev;
+        data[8] = sample.battery;
         SimbleeBLE.send(data,9);
 }
 void sleepNow(long timeDiff){
