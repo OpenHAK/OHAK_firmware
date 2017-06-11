@@ -55,11 +55,12 @@ byte rates[RATE_SIZE]; //Array of heart rates
 byte rateSpot = 0;
 long lastBeat = 0; //Time at which the last beat occurred
 long lastTime;
-long interval = 30000; //30000
-int sleepTime = 60;
+long interval = 30000; //30000 this is how long we capture hr data
+long awakeTime;
+int sleepTime = 60; //600 this is production
 
 float beatsPerMinute;
-uint8_t beatAvg;
+int beatAvg;
 uint8_t lastBeatAvg;
 uint8_t aveBeatsAve[255];
 uint8_t aveCounter=0;
@@ -80,14 +81,14 @@ int bleInterval = 675;  // 675 ms between advertisement transmissions longer tim
 
  */
 typedef struct {
-  uint32_t epoch;
-  uint16_t steps;
-  uint8_t hr;
-  uint8_t hrDev;
-  uint8_t battery;
-  uint8_t aux1;
-  uint8_t aux2;
-  uint8_t aux3;
+        uint32_t epoch;
+        uint16_t steps;
+        uint8_t hr;
+        uint8_t hrDev;
+        uint8_t battery;
+        uint8_t aux1;
+        uint8_t aux2;
+        uint8_t aux3;
 } Payload;
 
 Payload samples[512];
@@ -151,7 +152,7 @@ void setup()
         if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) //Use default I2C port, 400kHz speed
         {
                 //Serial.println("MAX30105 was not found. Please check wiring/power. ");
-                while (1);
+                while (1) ;
         }
         //Serial.println("Place your index finger on the sensor with steady pressure.");
 
@@ -159,6 +160,7 @@ void setup()
         //particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
         //particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
         lastTime = millis();
+        delay(5000);
 }
 void bmi160_intr(void)
 {
@@ -183,9 +185,10 @@ void loop()
         particleSensor.wakeUp();
         particleSensor.setup();
         long lastTime;
-        lastBeatAvg = 0;
-        beatAvg = 0;
-        digitalWrite(GRN,LOW);
+        //SimbleeBLE.send(0);
+        //lastBeatAvg = 0;
+        //beatAvg = 0;
+        //digitalWrite(RED,LOW);
         // if (timeStatus() != timeNotSet) {
         //         String printString = digitalClockDisplay();
         // }
@@ -194,6 +197,7 @@ void loop()
                 lastTime = millis();
                 samples[currentSample].epoch = now();
                 samples[currentSample].steps = BMI160.getStepCount();
+                memset(aveBeatsAve,0,sizeof(aveBeatsAve));
                 aveCounter=0;
                 while(millis() - lastTime < interval) {
                         captureHR();
@@ -206,31 +210,35 @@ void loop()
                 // }
                 //
                 // uint8_t sampleHR = hrAveTotal/aveCounter;
-                samples[currentSample].hr = stats.average(aveBeatsAve,aveCounter);;
+                samples[currentSample].hr = stats.median(aveBeatsAve,aveCounter);
                 samples[currentSample].hrDev = stats.stdev(aveBeatsAve,aveCounter);
                 samples[currentSample].battery = getBatteryVoltage();
                 samples[currentSample].aux1 = analogRead(PIN_2);
                 samples[currentSample].aux2 = analogRead(PIN_3);
                 samples[currentSample].aux3 = analogRead(PIN_4);
-                if(currentSample<511){
-                  currentSample++;
-                }else{
-                  //TODO: Check and see if this works!
-                  for (int k = currentSample; k > i; k--){
-                    samples[k]=samples[k-1];
-                  }
-                  // for(uint16_t t=0;t<512;t++){
-                  //   memcpy(&samples[1], &samples[0], (512-1)*sizeof(*samples));
-                  // }
+                if(bConnected) {
+                        sendSamples(samples[currentSample]);
                 }
-                sleepNow();
+                if(currentSample<511) {
+                        currentSample++;
+                }else{
+                        //TODO: Check and see if this works!
+                        for (int k = currentSample; k > 0; k--) {
+                                samples[k]=samples[k-1];
+                        }
+                        // for(uint16_t t=0;t<512;t++){
+                        //   memcpy(&samples[1], &samples[0], (512-1)*sizeof(*samples));
+                        // }
+                }
+                awakeTime = millis() - lastTime;
+                sleepNow(0);
                 break;
         case 1:
                 captureHR();
                 break;
         case 2:
                 mode = 0;
-                sleepNow();
+                sleepNow(0);
                 break;
         }
         //Serial.print("IR=");
@@ -254,22 +262,40 @@ void SimbleeBLE_onReceive(char *data, int len) {
                 if(len >= 5) {
                         unsigned long myNum = (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
                         setTime(myNum);
+                        mode = 0;
                 }
         }
 
 }
-void sleepNow(){
+void sendSamples(Payload sample){
+        char data[20];
+        data[0] = (sample.epoch >> 24) & 0xFF;
+        data[1] = (sample.epoch >> 16) & 0xFF;
+        data[2] = (sample.epoch >> 8) & 0xFF;
+        data[3] = sample.epoch & 0xFF;
+        data[4] = (sample.steps >> 8) & 0xFF;
+        data[5] = sample.steps & 0xFF;
+        data[6] = sample.hr;
+        data[7] = sample.hrDev;
+        data[8] = sample.hrDev;
+        SimbleeBLE.send(data,9);
+}
+void sleepNow(long timeDiff){
         digitalWrite(RED,HIGH);
         digitalWrite(GRN,HIGH);
         particleSensor.setPulseAmplitudeIR(0); //Turn off IR LED
         particleSensor.setPulseAmplitudeRed(0); //Turn off Red LED
         particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
         particleSensor.shutDown();
-        Simblee_ULPDelay(SECONDS(sleepTime));
+        int sleepTimeNow = sleepTime - (interval/1000);
+        Simblee_ULPDelay(SECONDS(sleepTimeNow));
 }
 void captureHR(){
         long irValue = particleSensor.getGreen();
-        digitalWrite(RED,LOW);
+        //digitalWrite(RED,LOW);
+        while(SimbleeBLE.radioActive) {
+                ;
+        }
         if (checkForBeat(irValue) == true)
         {
                 //We sensed a beat!
@@ -289,16 +315,20 @@ void captureHR(){
                         for (byte x = 0; x < RATE_SIZE; x++)
                                 beatAvg += rates[x];
                         beatAvg /= RATE_SIZE;
+                        // if(bConnected) {
+                        //         SimbleeBLE.send((uint8_t)beatAvg);
+                        // }
                 }
         }
         digitalWrite(GRN,HIGH);
+        //Here is where you could send all the beats if you wanted
 
         if(beatAvg != lastBeatAvg) {
-          aveBeatsAve[aveCounter] = beatAvg;
-          aveCounter++;
-                if(bConnected) {
-                        SimbleeBLE.sendInt(beatAvg);
-                }
+                aveBeatsAve[aveCounter] = (uint8_t)beatAvg;
+                aveCounter++;
+                // if(bConnected) {
+                //         SimbleeBLE.sendInt(beatAvg);
+                // }
 
         }
         lastBeatAvg = beatAvg;
@@ -306,17 +336,17 @@ void captureHR(){
 void SimbleeBLE_onConnect()
 {
         bConnected = true;
-        digitalWrite(BLU, LOW);
-        mode = 1;
-        Lazarus.ariseLazarus(); // Tell Lazarus to arise.
+        //digitalWrite(BLU, LOW);
+        //mode = 1;
+        //Lazarus.ariseLazarus(); // Tell Lazarus to arise.
         //analogWrite(BLU,10);
 }
 
 void SimbleeBLE_onDisconnect()
 {
         bConnected = false;
-        mode = 2;
-        digitalWrite(BLU, HIGH);
+        //mode = 2;
+        //digitalWrite(BLU, HIGH);
         //analogWrite(BLU,255);
         //pinMode(BLU,INPUT);
 }
@@ -346,12 +376,12 @@ String digitalClockDisplay() {
         return dataString;
 }
 uint8_t getBatteryVoltage(){
-  int counts = analogRead(V_SENSE);
-  // Serial.print(counts); Serial.print("\t");
-  float volts = float(counts) * (3.3/1023.0);
-  // Serial.print(volts,3); Serial.print("\t");
-  volts *=2;
-  // Serial.println(volts,3);
+        int counts = analogRead(V_SENSE);
+        // Serial.print(counts); Serial.print("\t");
+        float volts = float(counts) * (3.3/1023.0);
+        // Serial.print(volts,3); Serial.print("\t");
+        volts *=2;
+        // Serial.println(volts,3);
 
-  return volts/BATT_VOLT_CONST;
+        return volts/BATT_VOLT_CONST;
 }
