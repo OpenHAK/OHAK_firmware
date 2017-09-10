@@ -55,9 +55,9 @@ byte rates[RATE_SIZE]; //Array of heart rates
 byte rateSpot = 0;
 long lastBeat = 0; //Time at which the last beat occurred
 long lastTime;
-long interval = 30000; //30000 this is how long we capture hr data
+long interval = 10000; //30000 this is how long we capture hr data
 long awakeTime;
-int sleepTime = 60; //600 this is production
+int sleepTime = 30; //600 is production
 
 float beatsPerMinute;
 int beatAvg;
@@ -66,7 +66,7 @@ uint8_t aveBeatsAve[255];
 uint8_t aveCounter=0;
 
 
-uint8_t mode = 0;
+uint8_t mode = 10;
 bool bConnected = false;
 
 // interval between advertisement transmissions ms (range is 20ms to 10.24s) - default 20ms
@@ -152,7 +152,7 @@ void setup()
         if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) //Use default I2C port, 400kHz speed
         {
                 //Serial.println("MAX30105 was not found. Please check wiring/power. ");
-                while (1) ;
+                while (1);
         }
         //Serial.println("Place your index finger on the sensor with steady pressure.");
 
@@ -179,6 +179,7 @@ void bmi160_intr(void)
 void loop()
 {
         if(Lazarus.lazarusArising()) {
+                digitalWrite(BLU,LOW);
                 // Serial.println("Lazarus has awakened!");
                 // Serial.println("");
         }
@@ -217,7 +218,7 @@ void loop()
                 samples[currentSample].aux2 = analogRead(PIN_3);
                 samples[currentSample].aux3 = analogRead(PIN_4);
                 if(bConnected) {
-                        sendSamples(samples[currentSample]);
+                        //sendSamples(samples[currentSample]);
                 }
                 if(currentSample<511) {
                         currentSample++;
@@ -240,6 +241,15 @@ void loop()
                 mode = 0;
                 sleepNow(0);
                 break;
+        case 3:
+                transferSamples();
+                break;
+        case 10:
+                //mode = 0;
+                digitalWrite(RED,LOW);
+                delay(250);
+                sleepNow(0);
+                break;
         }
         //Serial.print("IR=");
         //Serial.print(irValue);
@@ -257,6 +267,7 @@ void SimbleeBLE_onReceive(char *data, int len) {
         // if the first byte is 0x01 / on / true
         //Serial.print("Received data over BLE ");
         //Serial.println(len);
+        Lazarus.ariseLazarus();
         mode = data[0];
         if(mode==10) {
                 if(len >= 5) {
@@ -266,6 +277,14 @@ void SimbleeBLE_onReceive(char *data, int len) {
                 }
         }
 
+}
+void transferSamples(){
+        for(int i = 0; i<currentSample; i++) {
+                if(bConnected) {
+                        sendSamples(samples[i]);
+                }
+        }
+        mode = 0;
 }
 void sendSamples(Payload sample){
         char data[20];
@@ -278,11 +297,14 @@ void sendSamples(Payload sample){
         data[6] = sample.hr;
         data[7] = sample.hrDev;
         data[8] = sample.battery;
-        SimbleeBLE.send(data,9);
+        // send is queued (the ble stack delays send to the start of the next tx window)
+        while (!SimbleeBLE.send(data, 9))
+                ; // all tx buffers in use (can't send - try again later)
 }
 void sleepNow(long timeDiff){
         digitalWrite(RED,HIGH);
         digitalWrite(GRN,HIGH);
+        digitalWrite(BLU,HIGH);
         particleSensor.setPulseAmplitudeIR(0); //Turn off IR LED
         particleSensor.setPulseAmplitudeRed(0); //Turn off Red LED
         particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
