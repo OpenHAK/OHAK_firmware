@@ -45,6 +45,8 @@ Lazarus Lazarus;
 
 #include "OHAK_Definitions.h"
 
+//#define DEBUG 1
+
 
 MAX30105 particleSensor;
 
@@ -55,9 +57,9 @@ byte rates[RATE_SIZE]; //Array of heart rates
 byte rateSpot = 0;
 long lastBeat = 0; //Time at which the last beat occurred
 long lastTime;
-long interval = 10000; //30000 this is how long we capture hr data
+long interval = 30000; //30000 this is how long we capture hr data
 long awakeTime;
-int sleepTime = 30; //600 is production
+int sleepTime = 600; //600 is production
 
 float beatsPerMinute;
 int beatAvg;
@@ -145,8 +147,10 @@ void setup()
         BMI160.setStepCountEnabled(true);
         const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
         setTime(DEFAULT_TIME);
-        //Serial.begin(115200);
-        //Serial.println("Initializing...");
+        #ifdef DEBUG
+          Serial.begin(9600);
+          Serial.println("Initializing...");
+        #endif
 
         // Initialize sensor
         if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) //Use default I2C port, 400kHz speed
@@ -180,7 +184,9 @@ void loop()
 {
         if(Lazarus.lazarusArising()) {
                 digitalWrite(BLU,LOW);
-                // Serial.println("Lazarus has awakened!");
+                #ifdef DEBUG
+                        Serial.println("Lazarus has awakened!");
+                #endif
                 // Serial.println("");
         }
         particleSensor.wakeUp();
@@ -200,6 +206,9 @@ void loop()
                 samples[currentSample].steps = BMI160.getStepCount();
                 memset(aveBeatsAve,0,sizeof(aveBeatsAve));
                 aveCounter=0;
+                #ifdef DEBUG
+                        Serial.println("Starting HR capture");
+                #endif
                 while(millis() - lastTime < interval) {
                         captureHR();
                 }
@@ -227,10 +236,15 @@ void loop()
                         for (int k = currentSample; k > 0; k--) {
                                 samples[k]=samples[k-1];
                         }
+                        currentSample--;
                         // for(uint16_t t=0;t<512;t++){
                         //   memcpy(&samples[1], &samples[0], (512-1)*sizeof(*samples));
                         // }
                 }
+                #ifdef DEBUG
+                        Serial.print("Samples Captured: ");
+                        Serial.println(currentSample);
+                #endif
                 awakeTime = millis() - lastTime;
                 sleepNow(0);
                 break;
@@ -279,6 +293,9 @@ void SimbleeBLE_onReceive(char *data, int len) {
 
 }
 void transferSamples(){
+        #ifdef DEBUG
+                Serial.println("Starting History transfer");
+        #endif
         for(int i = 0; i<currentSample; i++) {
                 if(bConnected) {
                         sendSamples(samples[i]);
