@@ -45,7 +45,7 @@ Lazarus Lazarus;
 
 #include "OHAK_Definitions.h"
 
-#define DEBUG 1
+//#define DEBUG 1
 
 
 MAX30105 particleSensor;
@@ -164,7 +164,7 @@ void setup()
                 //Serial.println("MAX30105 was not found. Please check wiring/power. ");
                 while (1);
         }
-        
+
         particleSensor.setup(); //Configure sensor with default settings
         //particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
         //particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
