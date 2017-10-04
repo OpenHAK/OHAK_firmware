@@ -45,7 +45,7 @@ Lazarus Lazarus;
 
 #include "OHAK_Definitions.h"
 
-#define DEBUG 1
+//#define DEBUG 1
 
 
 MAX30105 particleSensor;
@@ -57,9 +57,9 @@ byte rates[RATE_SIZE]; //Array of heart rates
 byte rateSpot = 0;
 long lastBeat = 0; //Time at which the last beat occurred
 long lastTime;
-long interval = 10000; //30000 this is how long we capture hr data
+long interval = 30000; //30000 this is how long we capture hr data
 long awakeTime;
-int sleepTime = 30; //600 is production
+int sleepTime = 600; //600 is production
 
 float beatsPerMinute;
 int beatAvg;
@@ -128,7 +128,7 @@ void setup()
 // Device Information Service strings
         SimbleeBLE.manufacturerName = "openhak";
         SimbleeBLE.hardwareRevision = "0.3";
-        SimbleeBLE.softwareRevision = "0.0.1b";
+        SimbleeBLE.softwareRevision = "0.0.1";
         Wire.beginOnPins(SCL_PIN,SDA_PIN);
         // change the advertisement interval
         SimbleeBLE.advertisementInterval = bleInterval;
@@ -139,6 +139,24 @@ void setup()
         digitalWrite(BLU,HIGH);
         pinMode(GRN,OUTPUT);
         digitalWrite(GRN,HIGH);
+        digitalWrite(RED,LOW);
+        delay(400);
+        digitalWrite(GRN,LOW);
+        digitalWrite(RED,HIGH);
+        delay(400);
+        digitalWrite(GRN,HIGH);
+        digitalWrite(BLU,LOW);
+        delay(400);
+        digitalWrite(BLU,HIGH);
+        #ifdef DEBUG
+        digitalWrite(BLU,LOW);
+        delay(400);
+        digitalWrite(BLU,HIGH);
+        delay(400);
+        digitalWrite(BLU,LOW);
+        delay(400);
+        digitalWrite(BLU,HIGH);
+        #endif
         BMI160.begin(0, BMI_INT1);
         BMI160.attachInterrupt(bmi160_intr);
         BMI160.setIntTapEnabled(true);
