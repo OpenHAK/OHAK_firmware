@@ -45,7 +45,7 @@ Lazarus Lazarus;
 
 #include "OHAK_Definitions.h"
 
-//#define DEBUG 1
+#define DEBUG 1
 
 
 MAX30105 particleSensor;
@@ -57,10 +57,14 @@ byte rates[RATE_SIZE]; //Array of heart rates
 byte rateSpot = 0;
 long lastBeat = 0; //Time at which the last beat occurred
 long lastTime;
-long interval = 30000; //30000 this is how long we capture hr data
 long awakeTime;
+#ifndef DEBUG
+long interval = 30000; //30000 this is how long we capture hr data
 int sleepTime = 600; //600 is production
-
+#else
+long interval = 15000; //30000 this is how long we capture hr data
+int sleepTime = 60; //600 is production
+#endif
 float beatsPerMinute;
 int beatAvg;
 uint8_t lastBeatAvg;
@@ -97,7 +101,7 @@ Payload samples[512];
 
 uint16_t currentSample = 0;
 
-uint8_t advdata[15] =
+uint8_t advdata[14] =
 {
         13, // length // 0
         0x09, // complete local name type // 1
@@ -139,24 +143,8 @@ void setup()
         digitalWrite(BLU,HIGH);
         pinMode(GRN,OUTPUT);
         digitalWrite(GRN,HIGH);
-        digitalWrite(RED,LOW);
-        delay(400);
-        digitalWrite(GRN,LOW);
-        digitalWrite(RED,HIGH);
-        delay(400);
-        digitalWrite(GRN,HIGH);
-        digitalWrite(BLU,LOW);
-        delay(400);
-        digitalWrite(BLU,HIGH);
-        #ifdef DEBUG
-        digitalWrite(BLU,LOW);
-        delay(400);
-        digitalWrite(BLU,HIGH);
-        delay(400);
-        digitalWrite(BLU,LOW);
-        delay(400);
-        digitalWrite(BLU,HIGH);
-        #endif
+
+        //Setup all the devices
         BMI160.begin(0, BMI_INT1);
         BMI160.attachInterrupt(bmi160_intr);
         BMI160.setIntTapEnabled(true);
@@ -176,11 +164,30 @@ void setup()
                 //Serial.println("MAX30105 was not found. Please check wiring/power. ");
                 while (1);
         }
-        //Serial.println("Place your index finger on the sensor with steady pressure.");
-
+        
         particleSensor.setup(); //Configure sensor with default settings
         //particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
         //particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
+
+        //Blink the startup pattern
+        digitalWrite(RED,LOW);
+        delay(400);
+        digitalWrite(GRN,LOW);
+        digitalWrite(RED,HIGH);
+        delay(400);
+        digitalWrite(GRN,HIGH);
+        digitalWrite(BLU,LOW);
+        delay(400);
+        digitalWrite(BLU,HIGH);
+        #ifdef DEBUG
+        digitalWrite(BLU,LOW);
+        delay(400);
+        digitalWrite(BLU,HIGH);
+        delay(400);
+        digitalWrite(BLU,LOW);
+        delay(400);
+        digitalWrite(BLU,HIGH);
+        #endif
         lastTime = millis();
         delay(5000);
 }
@@ -210,6 +217,7 @@ void loop()
         particleSensor.wakeUp();
         particleSensor.setup();
         long lastTime;
+        int sleepTimeNow;
         //SimbleeBLE.send(0);
         //lastBeatAvg = 0;
         //beatAvg = 0;
@@ -264,14 +272,16 @@ void loop()
                         Serial.println(currentSample);
                 #endif
                 awakeTime = millis() - lastTime;
-                sleepNow(0);
+                sleepTimeNow = sleepTime - (interval/1000);
+                sleepNow(sleepTimeNow);
                 break;
         case 1:
                 captureHR();
                 break;
         case 2:
                 mode = 0;
-                sleepNow(0);
+                sleepTimeNow = sleepTime - (interval/1000);
+                sleepNow(sleepTimeNow);
                 break;
         case 3:
                 transferSamples();
@@ -280,7 +290,7 @@ void loop()
                 //mode = 0;
                 digitalWrite(RED,LOW);
                 delay(250);
-                sleepNow(0);
+                sleepNow(5);
                 break;
         }
         //Serial.print("IR=");
@@ -336,7 +346,7 @@ void sendSamples(Payload sample){
         while (!SimbleeBLE.send(data, 9))
                 ; // all tx buffers in use (can't send - try again later)
 }
-void sleepNow(long timeDiff){
+void sleepNow(long timeNow){
         digitalWrite(RED,HIGH);
         digitalWrite(GRN,HIGH);
         digitalWrite(BLU,HIGH);
@@ -344,8 +354,8 @@ void sleepNow(long timeDiff){
         particleSensor.setPulseAmplitudeRed(0); //Turn off Red LED
         particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
         particleSensor.shutDown();
-        int sleepTimeNow = sleepTime - (interval/1000);
-        Simblee_ULPDelay(SECONDS(sleepTimeNow));
+        //int sleepTimeNow = timeNow - (interval/1000);
+        Simblee_ULPDelay(SECONDS(timeNow));
 }
 void captureHR(){
         long irValue = particleSensor.getGreen();
