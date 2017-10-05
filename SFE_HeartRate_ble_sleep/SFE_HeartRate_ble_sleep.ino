@@ -132,7 +132,7 @@ void setup()
 // Device Information Service strings
         SimbleeBLE.manufacturerName = "openhak";
         SimbleeBLE.hardwareRevision = "0.3";
-        SimbleeBLE.softwareRevision = "0.0.2";
+        SimbleeBLE.softwareRevision = "0.0.3";
         Wire.beginOnPins(SCL_PIN,SDA_PIN);
         // change the advertisement interval
         SimbleeBLE.advertisementInterval = bleInterval;
@@ -227,6 +227,9 @@ void loop()
         // }
         switch (mode) {
         case 0:
+                #ifdef DEBUG
+                        Serial.println("Enter mode 1");
+                #endif
                 lastTime = millis();
                 samples[currentSample].epoch = now();
                 samples[currentSample].steps = BMI160.getStepCount();
@@ -253,7 +256,7 @@ void loop()
                 samples[currentSample].aux2 = analogRead(PIN_3);
                 samples[currentSample].aux3 = analogRead(PIN_4);
                 if(bConnected) {
-                        //sendSamples(samples[currentSample]);
+                        sendSamples(samples[currentSample]);
                 }
                 if(currentSample<511) {
                         currentSample++;
@@ -276,17 +279,29 @@ void loop()
                 sleepNow(sleepTimeNow);
                 break;
         case 1:
+                #ifdef DEBUG
+                        Serial.println("Enter mode 1");
+                #endif
                 captureHR();
                 break;
         case 2:
+                #ifdef DEBUG
+                        Serial.println("Enter mode 2");
+                #endif
                 mode = 0;
                 sleepTimeNow = sleepTime - (interval/1000);
                 sleepNow(sleepTimeNow);
                 break;
         case 3:
+                #ifdef DEBUG
+                        Serial.println("Enter mode 3");
+                #endif
                 transferSamples();
                 break;
         case 10:
+                #ifdef DEBUG
+                        Serial.println("Enter mode 10");
+                #endif
                 //mode = 0;
                 digitalWrite(RED,LOW);
                 delay(250);
@@ -315,7 +330,7 @@ void SimbleeBLE_onReceive(char *data, int len) {
                 if(len >= 5) {
                         unsigned long myNum = (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
                         setTime(myNum);
-                        mode = 0;
+                        mode = 2;
                 }
         }
 
@@ -393,6 +408,10 @@ void captureHR(){
         if(beatAvg != lastBeatAvg) {
                 aveBeatsAve[aveCounter] = (uint8_t)beatAvg;
                 aveCounter++;
+                #ifdef DEBUG
+                        Serial.print("Beat Ave: ");
+                        Serial.println(beatAvg);
+                #endif
                 // if(bConnected) {
                 //         SimbleeBLE.sendInt(beatAvg);
                 // }
