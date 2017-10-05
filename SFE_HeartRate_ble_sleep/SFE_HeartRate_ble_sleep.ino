@@ -45,7 +45,7 @@ Lazarus Lazarus;
 
 #include "OHAK_Definitions.h"
 
-#define DEBUG 1
+//#define DEBUG 1
 
 
 MAX30105 particleSensor;
@@ -218,6 +218,7 @@ void loop()
         particleSensor.setup();
         long lastTime;
         int sleepTimeNow;
+        uint32_t startTime;
         //SimbleeBLE.send(0);
         //lastBeatAvg = 0;
         //beatAvg = 0;
@@ -238,8 +239,9 @@ void loop()
                 #ifdef DEBUG
                         Serial.println("Starting HR capture");
                 #endif
-                while(millis() - lastTime < interval) {
-                        captureHR();
+                startTime = millis();
+                while(captureHR(startTime)) {
+                        ;
                 }
                 // uint16_t hrAveTotal=0;
                 // byte min = 255;
@@ -282,7 +284,8 @@ void loop()
                 #ifdef DEBUG
                         Serial.println("Enter mode 1");
                 #endif
-                captureHR();
+                startTime = millis();
+                captureHR(startTime);
                 break;
         case 2:
                 #ifdef DEBUG
@@ -372,7 +375,10 @@ void sleepNow(long timeNow){
         //int sleepTimeNow = timeNow - (interval/1000);
         Simblee_ULPDelay(SECONDS(timeNow));
 }
-void captureHR(){
+bool captureHR(uint32_t startTime){
+        if(millis() - startTime > interval){
+                return(false);
+        }
         long irValue = particleSensor.getGreen();
         //digitalWrite(RED,LOW);
         while(SimbleeBLE.radioActive) {
@@ -418,6 +424,7 @@ void captureHR(){
 
         }
         lastBeatAvg = beatAvg;
+        return(true);
 }
 void SimbleeBLE_onConnect()
 {
