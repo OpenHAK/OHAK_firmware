@@ -45,7 +45,7 @@ Lazarus Lazarus;
 
 #include "OHAK_Definitions.h"
 
-//#define DEBUG 1
+#define DEBUG 1
 
 
 MAX30105 particleSensor;
@@ -132,7 +132,7 @@ void setup()
 // Device Information Service strings
         SimbleeBLE.manufacturerName = "openhak";
         SimbleeBLE.hardwareRevision = "0.3";
-        SimbleeBLE.softwareRevision = "0.0.1";
+        SimbleeBLE.softwareRevision = "0.0.2";
         Wire.beginOnPins(SCL_PIN,SDA_PIN);
         // change the advertisement interval
         SimbleeBLE.advertisementInterval = bleInterval;
