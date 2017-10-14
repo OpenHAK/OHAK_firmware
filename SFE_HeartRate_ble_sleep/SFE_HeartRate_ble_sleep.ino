@@ -45,7 +45,7 @@ Lazarus Lazarus;
 
 #include "OHAK_Definitions.h"
 
-//#define DEBUG 1
+#define DEBUG 1
 
 
 MAX30105 particleSensor;
@@ -360,6 +360,9 @@ void sendSamples(Payload sample){
         data[6] = sample.hr;
         data[7] = sample.hrDev;
         data[8] = sample.battery;
+        data[9] = sample.aux1;
+        data[10] = sample.aux2;
+        data[11] = sample.aux3;
         // send is queued (the ble stack delays send to the start of the next tx window)
         while (!SimbleeBLE.send(data, 9))
                 ; // all tx buffers in use (can't send - try again later)
@@ -377,6 +380,9 @@ void sleepNow(long timeNow){
 }
 bool captureHR(uint32_t startTime){
         if(millis() - startTime > interval){
+                #ifdef DEBUG
+                        Serial.println("HR capture done");
+                #endif
                 return(false);
         }
         long irValue = particleSensor.getGreen();
