@@ -135,7 +135,7 @@ void setup()
 // Device Information Service strings
         SimbleeBLE.manufacturerName = "openhak";
         SimbleeBLE.hardwareRevision = "0.3";
-        SimbleeBLE.softwareRevision = "0.0.3";
+        SimbleeBLE.softwareRevision = "0.0.4";
         Wire.beginOnPins(SCL_PIN,SDA_PIN);
         // change the advertisement interval
         SimbleeBLE.advertisementInterval = bleInterval;
