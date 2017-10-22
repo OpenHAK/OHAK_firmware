@@ -28,6 +28,8 @@
 
 
  */
+//#define DEBUG 1
+#include "OHAK_Definitions.h"
 
 #include <Wire.h>
 #include "MAX30105.h"
@@ -43,9 +45,9 @@ Lazarus Lazarus;
 #include <ota_bootloader.h>
 #include <SimbleeBLE.h>
 
-#include "OHAK_Definitions.h"
 
-#define DEBUG 1
+
+
 
 
 MAX30105 particleSensor;
@@ -70,6 +72,7 @@ int beatAvg;
 uint8_t lastBeatAvg;
 uint8_t aveBeatsAve[255];
 uint8_t aveCounter=0;
+bool tapFlag = false;
 
 
 uint8_t mode = 10;
@@ -145,12 +148,15 @@ void setup()
         digitalWrite(GRN,HIGH);
 
         //Setup all the devices
-        BMI160.begin(0, BMI_INT1);
-        BMI160.attachInterrupt(bmi160_intr);
-        BMI160.setIntTapEnabled(true);
+        BMI160.begin(0, -1); // use BMI_INT1 for internal interrupt, but we're handling the interrupt so using -1
+        BMI160.attachInterrupt(NULL); // use bmi160_intr for internal interrupt callback, but we're handling the interrupt so NULL
+        //BMI160.setIntTapEnabled(true);
         BMI160.setIntDoubleTapEnabled(true);
         BMI160.setStepDetectionMode(BMI160_STEP_MODE_NORMAL);
         BMI160.setStepCountEnabled(true);
+        pinMode(BMI_INT1, INPUT); // set BMI interrupt pin
+        Simblee_pinWake(BMI_INT1, LOW); // use this to wake the MCU if its sleeping
+
         const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
         setTime(DEFAULT_TIME);
         #ifdef DEBUG
@@ -193,7 +199,9 @@ void setup()
 }
 void bmi160_intr(void)
 {
-        byte int_status = BMI160.getIntStatus0();
+        tapFlag = true;
+        //Lazarus.ariseLazarus();
+        //byte int_status = BMI160.getIntStatus0();
         // Serial.print("Steps ");
         // Serial.print(BMI160.getStepCount());
         // Serial.print(" Single ");
@@ -213,6 +221,17 @@ void loop()
                         Serial.println("Lazarus has awakened!");
                 #endif
                 // Serial.println("");
+        }
+        if (Simblee_pinWoke(BMI_INT1))
+        {
+                byte int_status = BMI160.getIntStatus0();
+                #ifdef DEBUG
+                        Serial.println("TAP has awakened!");
+                #endif
+                Simblee_resetPinWake(BMI_INT1);
+                digitalWrite(RED,LOW);
+                delay(100);
+                digitalWrite(RED,HIGH);
         }
         particleSensor.wakeUp();
         particleSensor.setup();
@@ -383,17 +402,21 @@ bool captureHR(uint32_t startTime){
                 #ifdef DEBUG
                         Serial.println("HR capture done");
                 #endif
+
                 return(false);
         }
+        //analogWrite(GRN,200);
         long irValue = particleSensor.getGreen();
+        //digitalWrite(GRN,HIGH);
         //digitalWrite(RED,LOW);
         while(SimbleeBLE.radioActive) {
                 ;
         }
         if (checkForBeat(irValue) == true)
         {
+                analogWrite(BLU,200);
                 //We sensed a beat!
-                digitalWrite(GRN,LOW);
+                //digitalWrite(GRN,LOW);
                 long delta = millis() - lastBeat;
                 lastBeat = millis();
 
@@ -414,7 +437,8 @@ bool captureHR(uint32_t startTime){
                         // }
                 }
         }
-        digitalWrite(GRN,HIGH);
+        digitalWrite(BLU,HIGH);
+        //digitalWrite(GRN,HIGH);
         //Here is where you could send all the beats if you wanted
 
         if(beatAvg != lastBeatAvg) {
