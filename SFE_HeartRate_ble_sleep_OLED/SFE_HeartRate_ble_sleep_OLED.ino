@@ -33,7 +33,7 @@
 
 #include <Wire.h>
 #include "MAX30105.h"
-
+#include <OpenHAK_MicroOLED.h>
 #include "heartRate.h"
 #include <BMI160Gen.h>
 
@@ -49,6 +49,7 @@ Lazarus Lazarus;
 
 
 
+MicroOLED oled(PIN_RESET, DC);    // reset pin, I2C address
 
 MAX30105 particleSensor;
 
@@ -194,6 +195,21 @@ void setup()
         delay(400);
         digitalWrite(BLU,HIGH);
         #endif
+
+        oled.begin();    // Initialize the OLED
+        oled.flipHorizontal(true);
+        oled.flipVertical(true);
+        oled.clear(ALL); // Clear the display's internal memory
+        oled.clear(PAGE); // Clear the buffer.
+        oled.setFontType(2);
+        oled.setCursor(0,0);
+        oled.print("09:30");
+        oled.setCursor(0,24);
+        oled.setFontType(0);
+        oled.println("text from");
+        oled.print("Joel");
+        oled.display();
+        
         lastTime = millis();
         delay(5000);
 }
