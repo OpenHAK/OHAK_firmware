@@ -346,8 +346,8 @@ void loop()
       //mode = 0;
       digitalWrite(RED, LOW);
       printOLED("Sync me :)",false);
-      delay(250);
-      digitalWrite(OLED_RESET,LOW);
+      delay(500);
+//      digitalWrite(OLED_RESET,LOW);
       sleepNow(10);
       break;
   }

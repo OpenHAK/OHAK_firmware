@@ -7,13 +7,16 @@ void splashOLED(){
   oled.flipVertical(true);
   oled.clear(ALL); // Clear the display's internal memory
   oled.clear(PAGE); // Clear the buffer.
-  oled.setFontType(2);
+  oled.display();
+  oled.setFontType(1);
   oled.setCursor(0, 0);
   oled.print("OpenHAK");
   oled.setCursor(0, 24);
   oled.setFontType(0);
   oled.println("version");
   oled.print(VERSION);
+//  oled.flipHorizontal(true);
+//  oled.flipVertical(true);
   oled.display();
 }
 
@@ -27,6 +30,7 @@ void printOLED(String inString, boolean printTime) {
   oled.flipVertical(true);
   oled.clear(ALL); // Clear the display's internal memory
   oled.clear(PAGE); // Clear the buffer.
+  oled.display();
   oled.setFontType(2);
   oled.setCursor(0, 0);
   if(printTime){
@@ -45,5 +49,7 @@ void printOLED(String inString, boolean printTime) {
   oled.setCursor(0, 24);
   oled.setFontType(0);
   oled.println(inString);
+//  oled.flipHorizontal(true);
+//  oled.flipVertical(true);
   oled.display();
 }
