@@ -1,3 +1,5 @@
+
+
 /*
    Optical Heart Rate Detection (PBA Algorithm) using the MAX30105 Breakout
    By: Nathan Seidle @ SparkFun Electronics
@@ -38,19 +40,23 @@
 #include <BMI160Gen.h>
 
 #include "QuickStats.h"
-#include <TimeLib.h>
+//#include <TimeLib.h>
+#include <Timezone.h>
 #include <Lazarus.h>
 Lazarus Lazarus;
 
-#include <ota_bootloader.h>
+#include <ota_bootloader.h> 
 #include <SimbleeBLE.h>
 
 
+String VERSION = "0.1.0";
 
-
-
+// OLED stuff
 MicroOLED oled(OLED_RESET, DC);    // reset pin, I2C address
 String bpm = "";
+
+
+time_t localTime, utc;
 
 MAX30105 particleSensor;
 
@@ -197,19 +203,7 @@ void setup()
   digitalWrite(BLU, HIGH);
 #endif
 
-  oled.begin();    // Initialize the OLED
-  oled.flipHorizontal(true);
-  oled.flipVertical(true);
-  oled.clear(ALL); // Clear the display's internal memory
-  oled.clear(PAGE); // Clear the buffer.
-  oled.setFontType(2);
-  oled.setCursor(0, 0);
-  oled.print("09:30");
-  oled.setCursor(0, 24);
-  oled.setFontType(0);
-  oled.println("text from");
-  oled.print("Leif");
-  oled.display();
+  splashOLED();
 
   lastTime = millis();
   delay(5000);
@@ -351,8 +345,9 @@ void loop()
 #endif
       //mode = 0;
       digitalWrite(RED, LOW);
-      printOLED("Not Connected",false);
-      delay(600);
+      printOLED("Sync me :)",false);
+      delay(250);
+      digitalWrite(OLED_RESET,LOW);
       sleepNow(10);
       break;
   }
@@ -368,50 +363,9 @@ void loop()
 
   //Serial.println();
 }
-void SimbleeBLE_onReceive(char *data, int len) {
-  // if the first byte is 0x01 / on / true
-  //Serial.print("Received data over BLE ");
-  //Serial.println(len);
-  Lazarus.ariseLazarus();
-  mode = data[0];
-  if (mode == 10) {
-    if (len >= 5) {
-      unsigned long myNum = (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
-      setTime(myNum);
-      mode = 2;
-    }
-  }
 
-}
-void transferSamples() {
-#ifdef DEBUG
-  Serial.println("Starting History transfer");
-#endif
-  for (int i = 0; i < currentSample; i++) {
-    if (bConnected) {
-      sendSamples(samples[i]);
-    }
-  }
-  mode = 0;
-}
-void sendSamples(Payload sample) {
-  char data[20];
-  data[0] = (sample.epoch >> 24) & 0xFF;
-  data[1] = (sample.epoch >> 16) & 0xFF;
-  data[2] = (sample.epoch >> 8) & 0xFF;
-  data[3] = sample.epoch & 0xFF;
-  data[4] = (sample.steps >> 8) & 0xFF;
-  data[5] = sample.steps & 0xFF;
-  data[6] = sample.hr;
-  data[7] = sample.hrDev;
-  data[8] = sample.battery;
-  data[9] = sample.aux1;
-  data[10] = sample.aux2;
-  data[11] = sample.aux3;
-  // send is queued (the ble stack delays send to the start of the next tx window)
-  while (!SimbleeBLE.send(data, 9))
-    ; // all tx buffers in use (can't send - try again later)
-}
+
+
 void sleepNow(long timeNow) {
   digitalWrite(RED, HIGH);
   digitalWrite(GRN, HIGH);
@@ -424,105 +378,31 @@ void sleepNow(long timeNow) {
   //int sleepTimeNow = timeNow - (interval/1000);
   Simblee_ULPDelay(SECONDS(timeNow));
 }
-bool captureHR(uint32_t startTime) {
-  if (millis() - startTime > interval) {
-#ifdef DEBUG
-    Serial.println("HR capture done");
-#endif
 
-    return (false);
-  }
-  //analogWrite(GRN,200);
-  long irValue = particleSensor.getGreen();
-  //digitalWrite(GRN,HIGH);
-  //digitalWrite(RED,LOW);
-  while (SimbleeBLE.radioActive) {
-    ;
-  }
-  if (checkForBeat(irValue) == true)
-  {
-    analogWrite(BLU, 200);
-    //We sensed a beat!
-    //digitalWrite(GRN,LOW);
-    long delta = millis() - lastBeat;
-    lastBeat = millis();
 
-    beatsPerMinute = 60 / (delta / 1000.0);
-
-    if (beatsPerMinute < 255 && beatsPerMinute > 20)
-    {
-      rates[rateSpot++] = (byte)beatsPerMinute; //Store this reading in the array
-      rateSpot %= RATE_SIZE; //Wrap variable
-
-      //Take average of readings
-      beatAvg = 0;
-      for (byte x = 0; x < RATE_SIZE; x++)
-        beatAvg += rates[x];
-      beatAvg /= RATE_SIZE;
-      // if(bConnected) {
-      //         SimbleeBLE.send((uint8_t)beatAvg);
-      // }
-    }
-  }
-  digitalWrite(BLU, HIGH);
-  //digitalWrite(GRN,HIGH);
-  //Here is where you could send all the beats if you wanted
-
-  if (beatAvg != lastBeatAvg) {
-    aveBeatsAve[aveCounter] = (uint8_t)beatAvg;
-    aveCounter++;
-#ifdef DEBUG
-    Serial.print("Beat Ave: ");
-    Serial.println(beatAvg);
-#endif
-    // if(bConnected) {
-    //         SimbleeBLE.sendInt(beatAvg);
-    // }
-
-  }
-  lastBeatAvg = beatAvg;
-  return (true);
-}
-void SimbleeBLE_onConnect()
-{
-  bConnected = true;
-  //digitalWrite(BLU, LOW);
-  //mode = 1;
-  //Lazarus.ariseLazarus(); // Tell Lazarus to arise.
-  //analogWrite(BLU,10);
-}
-
-void SimbleeBLE_onDisconnect()
-{
-  bConnected = false;
-  //mode = 2;
-  //digitalWrite(BLU, HIGH);
-  //analogWrite(BLU,255);
-  //pinMode(BLU,INPUT);
-}
 
 String digitalClockDisplay() {
   // digital clock display of the time
   String dataString = "";
-  dataString += year();
+  dataString += year(localTime);
   dataString += "-";
-  dataString += month();
+  dataString += month(localTime);
   dataString += "-";
-  dataString += day();
+  dataString += day(localTime);
   dataString += " ";
-  dataString += hour();
+  dataString += hour(localTime);
   dataString += ":";
   //Serial.print(hour());
-  if (minute() < 10) {
+  if (minute(localTime) < 10) {
     dataString += "0";
   }
-  dataString += minute();
+  dataString += minute(localTime);
   dataString += ":";
   //Serial.print(hour());
-  if (second() < 10) {
+  if (second(localTime) < 10) {
     dataString += "0";
   }
-  dataString += second();
+  dataString += second(localTime);
   return dataString;
 }
 uint8_t getBatteryVoltage() {
@@ -536,28 +416,4 @@ uint8_t getBatteryVoltage() {
   return volts / BATT_VOLT_CONST;
 }
 
-void printOLED(String inString, boolean printTime) {
-  
-  
-  oled.begin();    // Initialize the OLED
-  oled.flipHorizontal(true);
-  oled.flipVertical(true);
-  oled.clear(ALL); // Clear the display's internal memory
-  oled.clear(PAGE); // Clear the buffer.
-  oled.setFontType(2);
-  oled.setCursor(0, 0);
-  if(printTime){
-    String timeString = "";
-    timeString += hour();
-    timeString += ":";
-    if (minute() < 10) {
-      timeString += "0";
-    }
-    timeString += minute();
-    oled.print(timeString);
-  }
-  oled.setCursor(0, 24);
-  oled.setFontType(0);
-  oled.println(inString);
-  oled.display();
-}
+
