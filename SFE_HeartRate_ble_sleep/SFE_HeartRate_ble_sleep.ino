@@ -28,7 +28,7 @@
 
 
  */
-//#define DEBUG 1
+#define DEBUG 1
 #include "OHAK_Definitions.h"
 
 #include <Wire.h>
@@ -151,6 +151,8 @@ void setup()
         BMI160.begin(0, -1); // use BMI_INT1 for internal interrupt, but we're handling the interrupt so using -1
         BMI160.attachInterrupt(NULL); // use bmi160_intr for internal interrupt callback, but we're handling the interrupt so NULL
         //BMI160.setIntTapEnabled(true);
+        BMI160.setAccelerometerRange(4);
+        BMI160.setDetectionThreshold(CURIE_IMU_TAP, 750);
         BMI160.setIntDoubleTapEnabled(true);
         BMI160.setStepDetectionMode(BMI160_STEP_MODE_NORMAL);
         BMI160.setStepCountEnabled(true);
@@ -215,6 +217,9 @@ void bmi160_intr(void)
 
 void loop()
 {
+        long lastTime;
+        int sleepTimeNow;
+        uint32_t startTime;
         if(Lazarus.lazarusArising()) {
                 digitalWrite(BLU,LOW);
                 #ifdef DEBUG
@@ -225,19 +230,47 @@ void loop()
         if (Simblee_pinWoke(BMI_INT1))
         {
                 byte int_status = BMI160.getIntStatus0();
+
                 #ifdef DEBUG
                         Serial.println("TAP has awakened!");
                 #endif
+                // if (BMI160.tapDetected(X_AXIS, NEGATIVE))
+                //         Serial.println("Tap detected on negative X-axis");
+                // if (BMI160.tapDetected(X_AXIS, POSITIVE))
+                //         Serial.println("Tap detected on positive X-axis");
+                // if (BMI160.tapDetected(Y_AXIS, NEGATIVE))
+                //         Serial.println("Tap detected on negative Y-axis");
+                // if (BMI160.tapDetected(Y_AXIS, POSITIVE))
+                //         Serial.println("Tap detected on positive Y-axis");
                 Simblee_resetPinWake(BMI_INT1);
-                digitalWrite(RED,LOW);
-                delay(100);
-                digitalWrite(RED,HIGH);
+                if (BMI160.tapDetected(X_AXIS, NEGATIVE)){
+                        #ifdef DEBUG
+                                Serial.println("Tap detected on negative X_AXIS");
+                        #endif
+                        digitalWrite(RED,LOW);
+                        delay(100);
+                        digitalWrite(RED,HIGH);
+                }
+                else if (BMI160.tapDetected(X_AXIS, POSITIVE)){
+                        #ifdef DEBUG
+                                Serial.println("Tap detected on positive X_AXIS");
+                        #endif
+                        digitalWrite(RED,LOW);
+                        delay(100);
+                        digitalWrite(RED,HIGH);
+                }else{
+                        sleepTimeNow = sleepTime - (interval/1000);
+                        sleepNow(sleepTimeNow);
+                        return;
+                }
+                // if (BMI160.getInterruptStatus(CURIE_IMU_TAP)) {
+                //
+                // }
+
+
         }
         particleSensor.wakeUp();
         particleSensor.setup();
-        long lastTime;
-        int sleepTimeNow;
-        uint32_t startTime;
         //SimbleeBLE.send(0);
         //lastBeatAvg = 0;
         //beatAvg = 0;
