@@ -167,7 +167,7 @@ void setup()
         #endif
 
         // Initialize sensor
-        if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) //Use default I2C port, 400kHz speed
+        if (!particleSensor.begin(Wire, 400)) //Use default I2C port, 400kHz speed
         {
                 //Serial.println("MAX30105 was not found. Please check wiring/power. ");
                 while (1);
