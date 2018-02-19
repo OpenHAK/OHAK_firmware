@@ -57,29 +57,41 @@ String bpm = "";
 
 
 time_t localTime, utc;
+int minutesOffset = 0;
+signed char timeZoneOffset = 0;
 
 MAX30105 particleSensor;
 
 QuickStats stats; //initialize an instance of stats class
 
-const byte RATE_SIZE = 4; //Increase this for more averaging. 4 is good.
-byte rates[RATE_SIZE]; //Array of heart rates
-byte rateSpot = 0;
-long lastBeat = 0; //Time at which the last beat occurred
+
 long lastTime;
 long awakeTime;
-#ifndef DEBUG
+//#ifndef DEBUG
+//long interval = 15000; //30000 this is how long we capture hr data
+//int sleepTime = 60; //600 is production
+//#else
 long interval = 30000; //30000 this is how long we capture hr data
 int sleepTime = 600; //600 is production
-#else
-long interval = 15000; //30000 this is how long we capture hr data
-int sleepTime = 60; //600 is production
-#endif
+//#endif
+
+float volts = 8;
+
+//const byte RATE_SIZE = 4; //Increase this for more averaging. 4 is good.
+//byte rates[RATE_SIZE]; //Array of heart rates
+//byte rateSpot = 0;
+long lastBeatTime = 0; //Time at which the last beat occurred
+bool firstBeat = true;
 float beatsPerMinute;
-int beatAvg;
-uint8_t lastBeatAvg;
-uint8_t aveBeatsAve[255];
-uint8_t aveCounter = 0;
+//int beatAvg;
+//uint8_t lastBeatAvg;
+//uint8_t aveBeatsAve[255];
+//uint8_t aveCounter = 0;
+int beat;
+uint8_t lastBeat;
+uint8_t arrayBeats[256];
+uint8_t beatCounter;
+
 bool tapFlag = false;
 
 
@@ -165,12 +177,14 @@ void setup()
   pinMode(BMI_INT1, INPUT); // set BMI interrupt pin
   Simblee_pinWake(BMI_INT1, LOW); // use this to wake the MCU if its sleeping
 
-  const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
-  setTime(DEFAULT_TIME);
+  
 #ifdef DEBUG
   Serial.begin(9600);
   Serial.println("Initializing...");
 #endif
+
+const unsigned long DEFAULT_TIME = 1357041600; // Jan 1 2013
+setTime(DEFAULT_TIME);
 
   // Initialize sensor
   if (!particleSensor.begin(Wire, 400)) //Use default I2C port, 400kHz speed
@@ -240,7 +254,6 @@ void loop()
     Serial.println("TAP has awakened!");
 #endif
     Simblee_resetPinWake(BMI_INT1);
-    digitalWrite(RED, LOW);
     delay(100);
     digitalWrite(RED, HIGH);
   }
@@ -259,17 +272,22 @@ void loop()
   switch (mode) {
     case 0:
 #ifdef DEBUG
-      Serial.println("Enter mode 1");
+      Serial.println("Enter mode 0");
 #endif
       lastTime = millis();
-      samples[currentSample].epoch = now();
+      utc = now();  // This works to keep time incrementing that we send to the phone
+      localTime = utc + (minutesOffset/60); // This does not work to keep track of time we pring on screen??
+      samples[currentSample].epoch = utc;  // Send utc time to the phone. Phone will manage timezone, etc.
       samples[currentSample].steps = BMI160.getStepCount();
-      memset(aveBeatsAve, 0, sizeof(aveBeatsAve));
-      aveCounter = 0;
+      memset(arrayBeats, 0, sizeof(arrayBeats));
+      firstBeat = true; 
+      beat = lastBeat = beatCounter = 0;
 #ifdef DEBUG
       Serial.println("Starting HR capture");
 #endif
       printOLED("Measuring Heart Rate",true);
+//      aveCounter = 0;                       // used with original beat counter code
+//      beatAvg = lastBeatAvg = rateSpot = 0; // used with original beat counter code
       startTime = millis();
       while (captureHR(startTime)) {
         ;
@@ -282,13 +300,16 @@ void loop()
       // }
       //
       // uint8_t sampleHR = hrAveTotal/aveCounter;
-      samples[currentSample].hr = stats.median(aveBeatsAve, aveCounter);
-      samples[currentSample].hrDev = stats.stdev(aveBeatsAve, aveCounter);
+//      BUILD THE REST OF THE BLE PACKET
+//      samples[currentSample].hr = stats.median(aveBeatsAve, aveCounter);
+      samples[currentSample].hr = stats.median(arrayBeats, beatCounter);
+      samples[currentSample].hrDev = stats.stdev(arrayBeats, beatCounter);
       samples[currentSample].battery = getBatteryVoltage();
       //                samples[currentSample].aux1 = analogRead(PIN_2);
       //                samples[currentSample].aux2 = analogRead(PIN_3);
       //                samples[currentSample].aux3 = analogRead(PIN_4);
-
+      
+      bpm = ""; // clear the bpm string
       bpm += String(samples[currentSample].hr);
       bpm += " BPM";
       printOLED(bpm,true);
@@ -346,6 +367,7 @@ void loop()
       //mode = 0;
       digitalWrite(RED, LOW);
       printOLED("Sync me :)",false);
+//      digitalWrite(RED, LOW);
       delay(500);
 //      digitalWrite(OLED_RESET,LOW);
       sleepNow(10);
@@ -408,7 +430,7 @@ String digitalClockDisplay() {
 uint8_t getBatteryVoltage() {
   int counts = analogRead(V_SENSE);
   // Serial.print(counts); Serial.print("\t");
-  float volts = float(counts) * (3.3 / 1023.0);
+  volts = float(counts) * (3.3 / 1023.0);
   // Serial.print(volts,3); Serial.print("\t");
   volts *= 2;
   // Serial.println(volts,3);

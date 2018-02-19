@@ -28,12 +28,14 @@ void SimbleeBLE_onReceive(char *data, int len) {
     if (len >= 5) {
       unsigned long myNum = (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4]; 
       setTime(myNum);
-      char offset = char(0xE2); //(data[5]);  // Phone sends UTC offset 
-      int minutesOffset = offset*10;
+      timeZoneOffset = 0xE2; //(data[5]);  // Phone sends UTC offset 
+      minutesOffset = timeZoneOffset;
+      minutesOffset *= 10;
       TimeChangeRule localCR = {"TCR", First, Sun, Nov, 2, minutesOffset};   
       Timezone localZone(localCR, localCR);
       utc = now();    //current time from the Time Library
       localTime = localZone.toLocal(utc);
+      setTime(utc);
       
       mode = 2;
     }
