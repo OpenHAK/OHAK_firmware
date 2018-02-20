@@ -35,8 +35,8 @@
 
 #include <Wire.h>
 #include "MAX30105.h"
-#include <OpenHAK_MicroOLED.h>
 #include "heartRate.h"
+#include <OpenHAK_MicroOLED.h>
 #include <BMI160Gen.h>
 
 #include "QuickStats.h"
