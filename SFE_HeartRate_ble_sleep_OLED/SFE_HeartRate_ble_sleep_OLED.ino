@@ -218,7 +218,7 @@ setTime(DEFAULT_TIME);
   byte sampleAverage = 8; //Options: 1, 2, 4, 8, 16, 32 *have not messed with this
   byte ledMode = 3; //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green *not a bad value?
   byte sampleRate = 200; //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200  *higher = noisier but better resolution
-  int pulseWidth = 215; //Options: 69, 118, 215, 411  *shorteded from 411
+  int pulseWidth = 118; //Options: 69, 118, 215, 411  *shorteded from 411
   int adcRange = 2048; //Options: 2048, 4096, 8192, 16384 *smaller range = larger sample number
 
   firstBeat = true;
