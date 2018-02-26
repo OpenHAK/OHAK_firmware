@@ -6,72 +6,85 @@ bool captureHR(uint32_t startTime) {
 #ifdef DEBUG
     Serial.println("HR capture done");
 #endif
-    return(false);
+    return (false);
   }
-
-//  long greenSample = particleSensor.getGreen();
-//  long redSample = particleSensor.getRed();
-  long irSample = particleSensor.getIR();
+  // Use the sum of Red and Green to create the sample
+  redSample = particleSensor.getRed();
+  irSample = particleSensor.getIR();
+  sumSample = redSample + irSample;
+  sumSample = irSample + redSample;
+  // Run the sample through a simple EMA highpass filter https://www.norwegiancreations.com/2016/03/arduino-tutorial-simple-high-pass-band-pass-and-band-stop-filtering/
+  sumEMA_S = (EMA_a*sumSample) + ((1-EMA_a)*sumEMA_S);  //run the EMA
+  sumHighpass = sumSample - sumEMA_S;                   //calculate the high-pass signal
 
   while (SimbleeBLE.radioActive) {
     ;
   }
-//  if (checkForBeat(greemnSample) == true)
-//  if (checkForBeat(redSample) == true)
-  if (checkForBeat(irSample) == true)
+
+  if (checkForPulse(sumHighpass) == true)
   {
+    unsigned  long thisMillis = millis();
     analogWrite(RED, 200);
     //We sensed a beat!
     if(firstBeat){
       firstBeat = false;
-      lastBeatTime = millis();
+      lastBeatTime = thisMillis;
       return(true);
     }
-    long delta = millis() - lastBeatTime;
-    lastBeatTime = millis();
+    delta = float(thisMillis - lastBeatTime);
+    lastBeatTime = thisMillis;
 
-    beatsPerMinute = 60 / (delta / 1000.0); // get instantaneous BPM
+    beatsPerMinute = 60 / (delta / 1000.0);
 
     if (beatsPerMinute < 200 && beatsPerMinute > 50)
     {
         beat = beatsPerMinute;
-        // if(bConnected) {
-        //         SimbleeBLE.send((uint8_t)beatAvg);
-        // }
+        arrayBeats[beatCounter] = (uint8_t)beat;
+        beatCounter++;
+        if(beatCounter > 255){ beatCounter = 0; }
     }
-  }
-  digitalWrite(RED, HIGH);
-  //Here is where you could send all the beats if you wanted
-
-  if (beat != lastBeat) {
-    arrayBeats[beatCounter] = (uint8_t)beat;
-    beatCounter++;
-    if(beatCounter > 255){ beatCounter = 0; }
 #ifdef DEBUG
-    Serial.print("instant BPM: ");
+    Serial.print("Instantaneous BPM: ");
     Serial.println(beat);
 #endif
-    // if(bConnected) {
-    //         SimbleeBLE.sendInt(beatAvg);
-    // }
-    
-    lastBeat = beat;
   }
-  return(true);
+  digitalWrite(RED, HIGH);
+
+  return (true);
 }
 
 
+bool checkForPulse(int sample){
 
-/*
- *        OLD AVERAGING CODE
- * 
- *    rates[rateSpot++] = (byte)beatsPerMinute; //Store this reading in the array
-      rateSpot %= RATE_SIZE; //Wrap variable
-      if(rateSpot == RATE_SIZE-1){
-        //Take average of readings
-        beatAvg = 0;
-        for (byte x = 0; x < RATE_SIZE; x++)
-          beatAvg += rates[x];
-        beatAvg /= RATE_SIZE;
- * 
- */
+boolean beatDetected = false;
+
+if(!rising){
+  if (sample < T){
+      T = sample;    // keep track of lowest point
+    }else{
+      amp = getAmplitude();
+      rising = true;
+      if(amp>50 && amp<3000){
+        beatDetected = true;  // detect beat on lowest point
+      }
+    }
+  }else{
+    if (sample > P){
+      P = sample;     // keep track of highest point
+    }else{
+      amp = getAmplitude();
+      rising = false;
+    }
+  }
+  return beatDetected;
+}
+
+int getAmplitude(){
+    int a = P-T;
+    if(rising){
+      T = P;
+    }else{
+      P = T;
+    }
+    return a;
+}

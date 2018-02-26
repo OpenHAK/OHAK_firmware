@@ -31,12 +31,15 @@
 
 */
 //#define DEBUG 1
+//#define OLED 1
 #include "OHAK_Definitions.h"
 
 #include <Wire.h>
 #include "MAX30105.h"
-#include <OpenHAK_MicroOLED.h>
 #include "heartRate.h"
+#ifdef OLED
+#include <OpenHAK_MicroOLED.h>
+#endif
 #include <BMI160Gen.h>
 
 #include "QuickStats.h"
@@ -45,15 +48,17 @@
 #include <Lazarus.h>
 Lazarus Lazarus;
 
-#include <ota_bootloader.h> 
+#include <ota_bootloader.h>
 #include <SimbleeBLE.h>
 
 
 String VERSION = "0.1.0";
 
 // OLED stuff
+#ifdef OLED
 MicroOLED oled(OLED_RESET, DC);    // reset pin, I2C address
 String bpm = "";
+#endif
 
 
 time_t localTime, utc;
@@ -77,21 +82,35 @@ int sleepTime = 600; //600 is production
 
 float volts = 8;
 
-//const byte RATE_SIZE = 4; //Increase this for more averaging. 4 is good.
-//byte rates[RATE_SIZE]; //Array of heart rates
-//byte rateSpot = 0;
+// heart beat stuff
+float EMA_a = 0.4;    //initialization of EMA alpha
+long sumEMA_S = 0;        //initialization of sum EMA S
+int irEMA_S = 0;        //initialization of IR EMA S
+int redEMA_S = 0;        //initialization of RED EMA S
+int greenEMA_S = 0;        //initialization of GREEN EMA S
+int sumHighpass = 0;
+int irHighpass = 0;
+int redHighpass = 0;
+int greenHighpass = 0;
+int sumSample = 0;
+int irSample = 0;
+int redSample = 0;
+int greenSample = 0;
 long lastBeatTime = 0; //Time at which the last beat occurred
 bool firstBeat = true;
 float beatsPerMinute;
-//int beatAvg;
-//uint8_t lastBeatAvg;
-//uint8_t aveBeatsAve[255];
-//uint8_t aveCounter = 0;
 int beat;
+float delta;
 uint8_t lastBeat;
 uint8_t arrayBeats[256];
 uint8_t beatCounter;
+unsigned long startTime;
+int T = 0;  // trough
+int P = 0;  // peak
+int amp;
+boolean rising = false;
 
+// tap stuff
 bool tapFlag = false;
 
 
@@ -177,7 +196,7 @@ void setup()
   pinMode(BMI_INT1, INPUT); // set BMI interrupt pin
   Simblee_pinWake(BMI_INT1, LOW); // use this to wake the MCU if its sleeping
 
-  
+
 #ifdef DEBUG
   Serial.begin(9600);
   Serial.println("Initializing...");
@@ -193,10 +212,24 @@ setTime(DEFAULT_TIME);
     while (1);
   }
 
-  particleSensor.setup(); //Configure sensor with default settings
-  //particleSensor.setPulseAmplitudeRed(0x0A); //Turn Red LED to low to indicate sensor is running
-  //particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
+  //Setup to sense a nice looking saw tooth on the plotter
+  //  *Joel's notes  -> NEEDS MOVE TO DEFINES
+  byte ledBrightness = 0x1F; //Options: 0=Off to 255=50mA *not a bad value
+  byte sampleAverage = 8; //Options: 1, 2, 4, 8, 16, 32 *have not messed with this
+  byte ledMode = 3; //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green *not a bad value?
+  byte sampleRate = 200; //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200  *higher = noisier but better resolution
+  int pulseWidth = 118; //Options: 69, 118, 215, 411  *shorteded from 411
+  int adcRange = 2048; //Options: 2048, 4096, 8192, 16384 *smaller range = larger sample number
 
+  firstBeat = true;
+  beat = lastBeat = beatCounter = 0;
+
+  particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); //Configure sensor with these settings
+
+#ifdef OLED
+  // Splash the OLED
+  splashOLED();
+#endif
   //Blink the startup pattern
   digitalWrite(RED, LOW);
   delay(400);
@@ -216,11 +249,11 @@ setTime(DEFAULT_TIME);
   delay(400);
   digitalWrite(BLU, HIGH);
 #endif
+  delay(2000);
 
-  splashOLED();
+
 
   lastTime = millis();
-  delay(5000);
 }
 void bmi160_intr(void)
 {
@@ -280,41 +313,40 @@ void loop()
       samples[currentSample].epoch = utc;  // Send utc time to the phone. Phone will manage timezone, etc.
       samples[currentSample].steps = BMI160.getStepCount();
       memset(arrayBeats, 0, sizeof(arrayBeats));
-      firstBeat = true; 
+      firstBeat = true;
       beat = lastBeat = beatCounter = 0;
 #ifdef DEBUG
       Serial.println("Starting HR capture");
 #endif
+#ifdef OLED
       printOLED("Measuring Heart Rate",true);
-//      aveCounter = 0;                       // used with original beat counter code
-//      beatAvg = lastBeatAvg = rateSpot = 0; // used with original beat counter code
+#endif
+      delay(1500);
+      sumEMA_S = particleSensor.getIR() + particleSensor.getRed(); // + particleSensor.getGreen();     //set filter sumEMA S for t=1
+      // irEMA_S = particleSensor.getIR();           //set filter irEMA S for t=1
+      // redEMA_S = particleSensor.getRed();         //set filter redEMA S for t=1
+      // greenEMA_S = particleSensor.getGreen();     //set filter greenEMA S for t=1
       startTime = millis();
       while (captureHR(startTime)) {
         ;
       }
-      // uint16_t hrAveTotal=0;
-      // byte min = 255;
-      // byte max = 0;
-      // for(byte i=0;i<aveCounter;i++){
-      //   hrAveTotal += aveBeatsAve[i];
-      // }
-      //
-      // uint8_t sampleHR = hrAveTotal/aveCounter;
+
 //      BUILD THE REST OF THE BLE PACKET
-//      samples[currentSample].hr = stats.median(aveBeatsAve, aveCounter);
+      // watch out for this, make sure the arrayBeats is large enough for the sample size
       samples[currentSample].hr = stats.median(arrayBeats, beatCounter);
       samples[currentSample].hrDev = stats.stdev(arrayBeats, beatCounter);
       samples[currentSample].battery = getBatteryVoltage();
       //                samples[currentSample].aux1 = analogRead(PIN_2);
       //                samples[currentSample].aux2 = analogRead(PIN_3);
       //                samples[currentSample].aux3 = analogRead(PIN_4);
-      
+#ifdef OLED
       bpm = ""; // clear the bpm string
       bpm += String(samples[currentSample].hr);
       bpm += " BPM";
       printOLED(bpm,true);
       delay(5000);
       digitalWrite(OLED_RESET,LOW);
+#endif
       if (bConnected) {
         sendSamples(samples[currentSample]);
       }
@@ -334,7 +366,7 @@ void loop()
       Serial.print("Samples Captured: ");
       Serial.println(currentSample);
 #endif
-  
+
       awakeTime = millis() - lastTime;
       sleepTimeNow = sleepTime - (interval / 1000);
       sleepNow(sleepTimeNow);
@@ -366,10 +398,11 @@ void loop()
 #endif
       //mode = 0;
       digitalWrite(RED, LOW);
+#ifdef OLED
       printOLED("Sync me :)",false);
-//      digitalWrite(RED, LOW);
       delay(500);
 //      digitalWrite(OLED_RESET,LOW);
+#endif
       sleepNow(10);
       break;
   }
@@ -392,7 +425,9 @@ void sleepNow(long timeNow) {
   digitalWrite(RED, HIGH);
   digitalWrite(GRN, HIGH);
   digitalWrite(BLU, HIGH);
+#ifdef OLED
   digitalWrite(OLED_RESET,LOW);
+#endif
   particleSensor.setPulseAmplitudeIR(0); //Turn off IR LED
   particleSensor.setPulseAmplitudeRed(0); //Turn off Red LED
   particleSensor.setPulseAmplitudeGreen(0); //Turn off Green LED
@@ -437,5 +472,3 @@ uint8_t getBatteryVoltage() {
 
   return volts / BATT_VOLT_CONST;
 }
-
-

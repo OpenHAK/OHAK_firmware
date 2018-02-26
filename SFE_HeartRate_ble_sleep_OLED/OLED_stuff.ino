@@ -1,4 +1,4 @@
-
+#ifdef OLED
 
 void splashOLED(){
     oled.begin();    // Initialize the OLED
@@ -6,7 +6,7 @@ void splashOLED(){
 //    oled.flipVertical(true);
     oled.clear(ALL); // Clear the display's internal memory
     oled.clear(PAGE); // Clear the buffer.
-    
+
     oled.setFontType(FONT_8x16);
     oled.setCursor(0, 0);
     oled.print("OpenHAK");
@@ -22,14 +22,14 @@ void splashOLED(){
 
 
 void printOLED(String inString, boolean printTime) {
-  
+
     oled.begin();    // Initialize the OLED
   //  oled.flipHorizontal(true);
   //  oled.flipVertical(true);
     oled.clear(ALL); // Clear the display's internal memory
     oled.clear(PAGE); // Clear the buffer.
 
-  
+
 #ifdef DEBUG
     uint8_t bat = getBatteryVoltage();
     oled.setFontType(FONT_5x7);
@@ -43,7 +43,7 @@ void printOLED(String inString, boolean printTime) {
     oled.clear(PAGE); // Clear the buffer.
 #endif
 
-    
+
     if(printTime){
       oled.setFontType(SEVEN_SEGMENT);  // (FONT_8x16);
       oled.setCursor(5, 0);
@@ -55,14 +55,14 @@ void printOLED(String inString, boolean printTime) {
       timeString += hour12;
       oled.setFontType(FONT_8x16);
       timeString += ":";
-      oled.setFontType(SEVEN_SEGMENT); 
+      oled.setFontType(SEVEN_SEGMENT);
       if (minute(localTime) < 10) {
         timeString += "0";
       }
       timeString += minute(localTime);
       oled.print(timeString);
     }
-  
+
   oled.setFontType(FONT_5x7);
   oled.setCursor(0, 24);
   oled.println(inString);
@@ -78,3 +78,4 @@ int format12(int h){
     return h ;
 }
 
+#endif
